@@ -1,0 +1,7 @@
+{
+  "name": "PET Cap Color Identifier",
+  "description": "An application that uses the computer's camera to identify the color of PET bottle caps in four designated zones, providing real-time visual feedback.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
