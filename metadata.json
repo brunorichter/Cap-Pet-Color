@@ -1,6 +1,6 @@
 {
-  "name": "PET Cap Color Identifier",
-  "description": "An application that uses the computer's camera to identify the color of PET bottle caps in four designated zones, providing real-time visual feedback.",
+  "name": "Identificador de Cor de Tampa PET",
+  "description": "Uma aplicação que usa a câmera do computador para identificar a cor de tampas de garrafa PET em quatro zonas designadas, fornecendo feedback visual em tempo real.",
   "requestFramePermissions": [
     "camera"
   ]

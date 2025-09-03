@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { Zone } from './types';
+import type { Zone, IdentificationMode } from './types';
 import ZoneBox from './components/ZoneBox';
 import { identifyColor } from './services/geminiService';
+import { identifyColorByRgb } from './services/rgbService';
+
 
 const INITIAL_ZONES: Zone[] = [
-  { id: 1, name: 'Zone 1', x: 5, y: 5, width: 43, height: 43, colorName: 'Scanning...', colorHex: '#FFFFFF', isProcessing: false },
-  { id: 2, name: 'Zone 2', x: 52, y: 5, width: 43, height: 43, colorName: 'Scanning...', colorHex: '#FFFFFF', isProcessing: false },
-  { id: 3, name: 'Zone 3', x: 5, y: 52, width: 43, height: 43, colorName: 'Scanning...', colorHex: '#FFFFFF', isProcessing: false },
-  { id: 4, name: 'Zone 4', x: 52, y: 52, width: 43, height: 43, colorName: 'Scanning...', colorHex: '#FFFFFF', isProcessing: false },
+  { id: 1, name: 'Zona 1', x: 5, y: 5, width: 43, height: 43, colorName: 'Analisando...', colorHex: '#FFFFFF', isProcessing: false },
+  { id: 2, name: 'Zona 2', x: 52, y: 5, width: 43, height: 43, colorName: 'Analisando...', colorHex: '#FFFFFF', isProcessing: false },
+  { id: 3, name: 'Zona 3', x: 5, y: 52, width: 43, height: 43, colorName: 'Analisando...', colorHex: '#FFFFFF', isProcessing: false },
+  { id: 4, name: 'Zona 4', x: 52, y: 52, width: 43, height: 43, colorName: 'Analisando...', colorHex: '#FFFFFF', isProcessing: false },
 ];
 
 const App: React.FC = () => {
@@ -19,26 +21,57 @@ const App: React.FC = () => {
   const [zones, setZones] = useState<Zone[]>(INITIAL_ZONES);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  const [identificationMode, setIdentificationMode] = useState<IdentificationMode>('gemini');
 
   useEffect(() => {
+    const getDevices = async () => {
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: true }); // Request permission
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = allDevices.filter(device => device.kind === 'videoinput');
+        setDevices(videoDevices);
+        if (videoDevices.length > 0 && !selectedDeviceId) {
+          setSelectedDeviceId(videoDevices[0].deviceId);
+        }
+      } catch (err) {
+        console.error("Error accessing or enumerating devices:", err);
+        setError("O acesso à câmera foi negado. Por favor, permita o acesso à câmera nas configurações do seu navegador.");
+      }
+    };
+    getDevices();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedDeviceId) return;
+
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720, facingMode: 'user' }
+          video: { deviceId: { exact: selectedDeviceId }, width: 1280, height: 720 }
         });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => {
             setIsCameraReady(true);
+            setError(null);
           };
         }
       } catch (err) {
-        console.error("Error accessing camera:", err);
-        setError("Camera access was denied. Please allow camera permissions in your browser settings.");
+        console.error("Error starting camera:", err);
+        setError("Não foi possível iniciar a câmera selecionada. Tente outra ou atualize a página.");
+        setIsCameraReady(false);
       }
     };
     startCamera();
-  }, []);
+
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [selectedDeviceId]);
 
   const processFrames = useCallback(async () => {
     if (isProcessingRef.current || !videoRef.current || !canvasRef.current || !isCameraReady) {
@@ -60,7 +93,7 @@ const App: React.FC = () => {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const getZoneImageData = (zone: Zone): string => {
+    const getZoneBase64Data = (zone: Zone): string => {
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         if (!tempCtx) return '';
@@ -76,12 +109,27 @@ const App: React.FC = () => {
         
         return tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
     };
+    
+    const getZoneImageData = (zone: Zone): ImageData | null => {
+      const sx = (zone.x / 100) * canvas.width;
+      const sy = (zone.y / 100) * canvas.height;
+      const sWidth = (zone.width / 100) * canvas.width;
+      const sHeight = (zone.height / 100) * canvas.height;
+      return ctx.getImageData(sx, sy, sWidth, sHeight);
+    };
 
     try {
-      const analysisPromises = zones.map(zone => {
-          const imageData = getZoneImageData(zone);
-          return identifyColor(imageData).then(result => ({ zoneId: zone.id, ...result }));
-      });
+        const analysisPromises = zones.map(async (zone) => {
+            if (identificationMode === 'gemini') {
+                const base64Data = getZoneBase64Data(zone);
+                return identifyColor(base64Data).then(result => ({ zoneId: zone.id, ...result }));
+            } else { // RGB mode
+                const imageData = getZoneImageData(zone);
+                if (!imageData) return { zoneId: zone.id, colorName: 'Erro', hexCode: '#FF4136' };
+                const result = identifyColorByRgb(imageData);
+                return { zoneId: zone.id, ...result };
+            }
+        });
       const results = await Promise.all(analysisPromises);
       
       setZones(prevZones => 
@@ -94,18 +142,17 @@ const App: React.FC = () => {
       );
     } catch (apiError) {
         console.error("An error occurred during API calls:", apiError);
-        setError("Failed to analyze image. See console for details.");
-        setZones(prev => prev.map(z => ({ ...z, isProcessing: false, colorName: 'Error', colorHex: '#FF4136' })));
+        setError("Falha ao analisar a imagem. Veja o console para detalhes.");
+        setZones(prev => prev.map(z => ({ ...z, isProcessing: false, colorName: 'Erro', colorHex: '#FF4136' })));
     } finally {
         isProcessingRef.current = false;
     }
-  }, [isCameraReady, zones]);
+  }, [isCameraReady, zones, identificationMode]);
 
   useEffect(() => {
     if (!isCameraReady) return;
     const intervalId = setInterval(processFrames, 3000);
     return () => clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCameraReady, processFrames]);
 
   return (
@@ -114,16 +161,45 @@ const App: React.FC = () => {
       <canvas ref={canvasRef} className="hidden" />
 
       <div className="absolute inset-0 z-10 p-4 bg-black/40 flex flex-col">
+        <div className="absolute top-4 left-4 z-20">
+             <label htmlFor="mode-select" className="sr-only">Modo de Identificação</label>
+             <select
+                 id="mode-select"
+                 value={identificationMode}
+                 onChange={(e) => setIdentificationMode(e.target.value as IdentificationMode)}
+                 className="bg-gray-800 text-white border border-gray-600 rounded-md p-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+             >
+                 <option value="gemini">IA Gemini</option>
+                 <option value="rgb">Cor RGB</option>
+             </select>
+        </div>
+
+        {devices.length > 1 && (
+            <div className="absolute top-4 right-4 z-20">
+                <select
+                    value={selectedDeviceId}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="bg-gray-800 text-white border border-gray-600 rounded-md p-2 shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Selecionar câmera"
+                >
+                    {devices.map((device, index) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                            {device.label || `Câmera ${index + 1}`}
+                        </option>
+                    ))}
+                </select>
+            </div>
+        )}
         <header className="text-center py-4 shrink-0">
-          <h1 className="text-4xl font-bold tracking-wider" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.7)' }}>PET Cap Color Identifier</h1>
-          <p className="text-lg text-gray-200" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>Position bottle caps within the zones for detection</p>
+          <h1 className="text-4xl font-bold tracking-wider" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.7)' }}>Identificador de Cor de Tampa PET</h1>
+          <p className="text-lg text-gray-200" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>Posicione as tampas de garrafa dentro das zonas para detecção</p>
         </header>
 
         <div className="flex-grow relative">
           {!isCameraReady ? (
             <div className="w-full h-full flex items-center justify-center bg-black/50 rounded-lg">
               <div className="text-center">
-                <p className="text-2xl font-semibold animate-pulse">Initializing Camera...</p>
+                <p className="text-2xl font-semibold animate-pulse">Iniciando Câmera...</p>
                 {error && <p className="text-red-400 mt-4 max-w-md">{error}</p>}
               </div>
             </div>

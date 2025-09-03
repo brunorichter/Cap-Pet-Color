@@ -15,3 +15,5 @@ export interface ColorResponse {
   colorName: string;
   hexCode: string;
 }
+
+export type IdentificationMode = 'gemini' | 'rgb';
