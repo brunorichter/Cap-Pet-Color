@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Zone } from '../types';
 
@@ -7,7 +6,7 @@ interface ZoneBoxProps {
 }
 
 const ZoneBox: React.FC<ZoneBoxProps> = ({ zone }) => {
-  const isIdentified = zone.colorName !== 'Scanning...' && zone.colorName !== 'None' && zone.colorName !== 'Error';
+  const isIdentified = zone.colorName !== 'Analisando...' && zone.colorName !== 'Nenhuma' && zone.colorName !== 'Erro';
 
   const boxStyle = {
     borderColor: zone.colorHex,
