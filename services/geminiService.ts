@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { ColorResponse } from '../types';
 
@@ -11,22 +10,22 @@ const ai = new GoogleGenAI({ apiKey });
 
 const model = 'gemini-2.5-flash';
 
-const prompt = `Analyze the provided image, which is a close-up view of a potential PET bottle cap. Your task is to identify the dominant color of the bottle cap.
+const prompt = `Analise a imagem fornecida, que é uma visão de perto de uma potencial tampa de garrafa PET. Sua tarefa é identificar a cor dominante da tampa da garrafa.
 
-Respond with a JSON object that strictly adheres to the following schema.
-If no bottle cap or distinct solid color is identifiable, return "None" and a white hex code.
-Do not provide any text or explanation outside of the JSON object.`;
+Responda com um objeto JSON que siga estritamente o esquema a seguir.
+Se nenhuma tampa de garrafa ou cor sólida distinta for identificável, retorne "Nenhuma" e um código hexadecimal branco.
+Não forneça nenhum texto ou explicação fora do objeto JSON.`;
 
 const responseSchema = {
     type: Type.OBJECT,
     properties: {
         colorName: {
             type: Type.STRING,
-            description: "The common name of the color (e.g., 'Red', 'Blue', 'Green')."
+            description: "O nome comum da cor (ex: 'Vermelho', 'Azul', 'Verde')."
         },
         hexCode: {
             type: Type.STRING,
-            description: "The hexadecimal code for the color (e.g., '#FF0000')."
+            description: "O código hexadecimal para a cor (ex: '#FF0000')."
         },
     },
     required: ["colorName", "hexCode"],
@@ -35,7 +34,7 @@ const responseSchema = {
 export const identifyColor = async (base64ImageData: string): Promise<ColorResponse> => {
     try {
         if (!base64ImageData) {
-            return { colorName: 'Error', hexCode: '#FF4136' };
+            return { colorName: 'Erro', hexCode: '#FF4136' };
         }
         
         const imagePart = {
@@ -62,11 +61,11 @@ export const identifyColor = async (base64ImageData: string): Promise<ColorRespo
             return result;
         } else {
              console.error("Invalid JSON structure received from API:", result);
-             return { colorName: 'Error', hexCode: '#FF4136' };
+             return { colorName: 'Erro', hexCode: '#FF4136' };
         }
 
     } catch (error) {
         console.error("Error identifying color:", error);
-        return { colorName: 'Error', hexCode: '#FF4136' };
+        return { colorName: 'Erro', hexCode: '#FF4136' };
     }
 };
